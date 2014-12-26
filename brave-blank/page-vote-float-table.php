@@ -3,7 +3,6 @@
 Template Name: Vote Float Table
 Version: 0.0.4
 */
-
 	//Kuhaku's voting stuff little modded:
 	if (isset($_GET['id'])) {
 		//This means that the user has voted so check first if they voted prior to 24 hours
@@ -35,7 +34,6 @@ Version: 0.0.4
 			setcookie('units', $unit_array, time() + 43200);
 		}
 	}
-
 	get_header();
 	global $woo_options;
 	
@@ -66,27 +64,37 @@ Version: 0.0.4
 	
 	//These are jsut starting values and will need to be adjusted... probably better to use 0.X instead of whole nubmers...
 	//Section weights
-	$STAT_WEIGHT = 4;
-	$SKILL_WEIGHT = 3;
-	$VOTE_WEIGHT = 2;
-	$NICHE_WEIGHT = 1;
+	$STAT_WEIGHT = 0.6;
+	$SKILL_WEIGHT = 0.3;
+	$VOTE_WEIGHT = 0.2;
+	$NICHE_WEIGHT = 0.1;
 	
 	//Individual Stat Weights
-	$ATK_WEIGHT = 4;
-	$DEF_WEIGHT = 3;
-	$HP_WEIGHT = 2;
-	$REC_WEIGHT = 1;
+	$ATK_WEIGHT = 0.6;
+	$DEF_WEIGHT = 0.3;
+	$HP_WEIGHT = 0.3;
+	$REC_WEIGHT = 0.1;
 	
 	//Individual Skill Weights
-	$LDR_SKILL_WEIGHT = 5;
-	$SYN_WEIGHT = 4;
-	$HIT_CNT_WEIGHT = 3;
-	$BB_WEIGHT = 2;
-	$BB_FILL_WEIGHT = 1;
+	$LDR_SKILL_WEIGHT = 0.2;
+	$SYN_WEIGHT = 0.2;
+	$HIT_CNT_WEIGHT = 0.2;
+	$BB_WEIGHT = 0.2;
+	$BB_FILL_WEIGHT = 0.2;
+	
+	function normalize($value, $max_range, $min_range){
+		//this funciton normalizes the stats so it falls into a value between 1 and 10
+		//UNLESS 0 is submitted which will return 0
+		if($value == 0 || !is_int($value) ){
+			return 0;
+		}
+		return 1 + ($value - $min_range) * ( 10-1 ) / ($max_range - $min_range);
+	}
 	
 	//Calculate the weighted value of the units
 	$args = array(
-		'post_type'		=> 'unit'
+		'post_type'		=> 'unit',
+		'posts_per_page' => -1
 	);
 	$units = new WP_Query( $args );
 	if( $units->have_posts() ) : 
@@ -112,7 +120,8 @@ Version: 0.0.4
 		'post_type'		=> 'unit',
 		'meta_key'		=> 'weighted_value',
 		'orderby'		=> 'meta_value_num',
-		'order'			=> 'DESC'
+		'order'			=> 'DESC',
+		'posts_per_page' => -1
 	);
 	$units = new WP_Query( $args );
 	if( $units->have_posts() ) : 
@@ -123,7 +132,6 @@ Version: 0.0.4
 		endwhile;
 	endif;
 	wp_reset_postdata();
-	
 	//Default full width display for pages in this theme.  
     //We display the content from the post first then display the float table after words.
 ?>
@@ -157,9 +165,6 @@ Version: 0.0.4
             <?php } ?>  
             <!-- Display the table -->
         	<table id="tablepress-19" class="tablepress tablepress-id-19">
-				<caption style="caption-side:bottom;text-align:left;border:none;background:none;margin:0;padding:0;">
-                	<a href="http://www.braveblank.com/wp-admin/admin.php?page=tablepress&action=edit&table_id=19" >Edit</a>
-                </caption>
 				<thead>
 					<tr class="row-1 odd">
 						<th class="column-1"><div>Overall Ranking</div></th>
@@ -171,7 +176,7 @@ Version: 0.0.4
                         <th class="column-7"><div>DEF</div></th>
                         <th class="column-8"><div>REC</div></th>
                         <th class="column-9"><div>Weighted Value</div></th>
-                        <th class = "column-10"><div>Today's Votes</div></th>
+                        <th class="column-10"><div>Today's Votes</div></th>
 					</tr>
 				</thead>
 				<tbody class="row-hover">
@@ -182,19 +187,20 @@ Version: 0.0.4
 				'post_type'		=> 'unit',
 				'meta_key'		=> 'rank',
 				'orderby'		=> 'meta_value_num',
-				'order'			=> 'ASC'
+				'order'			=> 'ASC',
+				'posts_per_page' => -1
 			);
 			$units = new WP_Query( $args );
 			if( $units->have_posts() ) :
 				$row_count = 1; 
 				while( $units->have_posts() ) : $units->the_post();
 				 ?>
-                <tr class="row-<?php echo $row_count + ($x %2 == 0 ? " even" : " odd"); ?>" >
+                <tr class="row-<?php echo $row_count + ($row_count%2 == 0 ? " even" : " odd"); ?>" >
                 	<td class = "column-1" width = "13%">
                     	<?php if (get_field('rank') == 1): ?>
-                        <img src = "http://www.braveblank.com/wp-content/uploads/2014/12/goldstar.png" height = "20" width = "20"></img>&nbsp;&nbsp;
+                        <img src = "http://www.braveblank.com/wp-content/uploads/2014/12/goldstar.png" height = "20" width = "20"></img>&nbsp;
                         <? else: ?>
-						&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+						&nbsp;&nbsp;&nbsp;&nbsp;
 						<?php endif; ?>
                         <?php if(get_field('rank') > get_field('last_weeks_rank')): ?>
                         <img src="http://www.braveblank.com/wp-content/uploads/2014/12/up.png" height="40" width = "30"></img>
@@ -207,11 +213,14 @@ Version: 0.0.4
                         <font size="3"><hr>&nbsp;&nbsp;Last Week:<?php the_field('last_weeks_rank');?></font>
                     </td>
                     <!-- add in a link to the custom post type single display when complete -->
-                    <td class="column-2"><?php the_post_thumbnail( array(50, 50) ); the_title(); ?></td>
-                    <td class=\"column-3\">Add tiers...</td>
-                    <td class=\"column-4\"><?php the_field('element');?></td>
-                    <td class=\"column-5\"><?php the_field('lord_hp');?></td>
-                    <td class=\"column-6\"><?php the_field('lord_atk');?></td>
+                    <td class="column-2">
+                    	<?php the_post_thumbnail( array(50, 50) ); ?>
+                    	<a href="<?php the_permalink(); ?>" title="<?php the_title_attribute(); ?>"><?php the_title(); ?></a>
+                    </td>
+                    <td class="column-3">Add tiers...</td>
+                    <td class="column-4"><?php the_field('element');?></td>
+                    <td class="column-5"><?php the_field('lord_hp');?></td>
+                    <td class="column-6"><?php the_field('lord_atk');?></td>
                     <td class="column-7"><?php the_field('lord_def');?></td>
                     <td class="column-8"><?php the_field('lord_rec');?></td>
                     <td class="column-9"><?php the_field('weighted_value');?></td>

@@ -1,11 +1,13 @@
 <?php 
 
+//Child Theme Includes
 add_action( 'wp_enqueue_scripts', 'brave_blank_enqueue_styles' );
 function brave_blank_enqueue_styles() {
     wp_enqueue_style( 'parent-style', get_template_directory_uri() . '/style.css' );
     wp_enqueue_style( 'child-style', get_stylesheet_uri(), array( 'parent-style' ) );
 }
 
+//Custom Post Type
 function brave_blank_custom_post_unit() {
   $labels = array(
     'name'               => _x( 'Units', 'A collection of Units from Brave Frontier' ),
@@ -34,3 +36,6 @@ function brave_blank_custom_post_unit() {
   register_post_type( 'unit', $args ); 
 }
 add_action( 'init', 'brave_blank_custom_post_unit' );
+
+//Unit Import Plugin
+include( plugin_dir_path( __FILE__ ) . '/includes/unit-importer.php');
