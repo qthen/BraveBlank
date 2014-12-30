@@ -49,7 +49,7 @@ if ( woo_active_sidebar( 'secondary' ) ) { $embed_width = '500'; }
 					<header>
 						<h1><?php the_title(); ?></h1>
 
-						<?php woo_post_meta(); ?>
+						<?php brave_blank_post_meta(); ?>
 
 					</header>
 

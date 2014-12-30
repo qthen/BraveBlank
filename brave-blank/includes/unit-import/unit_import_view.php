@@ -1,18 +1,58 @@
 <?php
 function upload_form() {
-	if ( isset( $_GET['message'] ))
-  {
-?>
-   <div id='message' class='updated fade'><p><strong>$_GET['message'] )</strong></p></div>
-<?php
-  }
-?>
+	$log = array();
 	// form HTML {{{
+?>
+
+<div class="wrap">
+	<h2>Import Unit Data CSV</h2>
+	
+	<?php 
+	if (!empty($log)) :
+		// messages HTML {{{
+	?>
+
+		<div class="wrap">
+			<?php if (!empty($log['error'])): ?>
+		
+			<div class="error">
+		
+				<?php foreach ($log['error'] as $error): ?>
+					<p><?php echo $error; ?></p>
+				<?php endforeach; ?>
+		
+			</div>
+		
+			<?php endif; ?>
+		
+			<?php if (!empty($log['notice'])): ?>
+		
+			<div class="updated fade">
+		
+				<?php foreach ($log['notice'] as $notice): ?>
+					<p><?php echo $notice; ?></p>
+				<?php endforeach; ?>
+		
+			</div>
+		
+			<?php endif; ?>
+		</div><!-- end wrap -->
+
+	<?php
+		// end messages HTML }}}
+		$log = array();
+	endif;
 	?>
 	
 	<form action="admin-post.php" method="post" enctype="multipart/form-data">
 		<input type="hidden" name="action" value="brave_blank_unit_import" />
 		<?php wp_nonce_field( 'brave_blank_unit_import_verify' ); ?>
+
+		<!-- Import as draft -->
+		<p>
+		<input name="_unit_importer_import_as_draft" type="hidden" value="publish" />
+		<label><input name="unit_importer_import_as_draft" type="checkbox" value="draft" /> Import units as drafts</label>
+		</p>
 		
 		<!-- File input -->
 		<p><label for="unit_import">Upload file:</label><br/>

@@ -1,8 +1,10 @@
 <?php
 /*
 Template Name: Vote Float Table
-Version: 0.0.4
 */
+	
+	$DEVELOPMENT_MODE = false;
+	$VERSION = "0.0.8";
 	//Kuhaku's voting stuff little modded:
 	if (isset($_GET['id'])) {
 		//This means that the user has voted so check first if they voted prior to 24 hours
@@ -21,12 +23,12 @@ Version: 0.0.4
 			$action = $_GET['action'];
 			if ($action == 1) {
 				//The user is upvoting so cast the upvote
-				$upvotes = get_field('upvotes') + 1;
+				$upvotes = get_field('upvotes', $id) + 1;
 				update_field('upvotes', $upvotes, $id);
 			}
 			else {
 				//The user is downvoting
-				$downvotes = get_field('downvotes') + 1;
+				$downvotes = get_field('downvotes', $id) + 1;
 				update_field('downvotes', $downvotes, $id);
 			}
 			array_push($unit_array, $id);
@@ -34,83 +36,183 @@ Version: 0.0.4
 			setcookie('units', $unit_array, time() + 43200);
 		}
 	}
+
+	if (isset($_GET['dev'])) {
+		if($_GET['dev'] == "true"){
+			$DEVELOPMENT_MODE = true;
+		}
+	}
 	get_header();
 	global $woo_options;
 	
-	/*The idea here is that we pull in all the units and calculate their usefulness based on a variety of factors.  Then after we have 
-	their individual stats we apply "weights" to them individually and by section so that we can tweak their placement in the table 
-	BEFORE the voting starts.  This way once peopel start voting it's jsut another weighted stat in the calculation which can 
-	drive the unit's overall placement or RANK.  Once this data is calculated and stored in the Unit's cusotm post type we display it.  
-	
-	This page should only focuses on displaying the data NOT doing the necessary calculations to determine the rankings.  The calculations 
-	should be done by a plugin created in the back end that can be manually run or cron jobbed... much of the calculation code currently 
-	located here will be moved to the back end after it's debugged.
-	
-	Version 0.0.2 Update:
-	so right now the queries actually run quite quickly but I only have 5 sample units in the BE so....
-	At this point the basics are complete the weights and such but I need to talk to Kuhaku about the finer point of how units 
-	should be ranked.  For exmaple I'mnot calculating:
-	- ldr_skill_value
-	- synergy_val
-	- bb_value 
-	at this point I'm not sure how these value shoudl be assigned/evaluated.
-	
-	Verison 0.0.3 
-	added Stars and flags... not sure if they work yet...
-	
-	Version 0.0.4
-	add voting...
-	*/
-	
+	if($DEVELOPMENT_MODE):
 	//These are jsut starting values and will need to be adjusted... probably better to use 0.X instead of whole nubmers...
 	//Section weights
-	$STAT_WEIGHT = 0.6;
-	$SKILL_WEIGHT = 0.3;
+	$STAT_WEIGHT = 0.45;
+	$SKILL_WEIGHT = 0.35;
 	$VOTE_WEIGHT = 0.2;
-	$NICHE_WEIGHT = 0.1;
+	//$NICHE_WEIGHT = 0.1;
 	
 	//Individual Stat Weights
-	$ATK_WEIGHT = 0.6;
-	$DEF_WEIGHT = 0.3;
-	$HP_WEIGHT = 0.3;
+	$ATK_WEIGHT = 0.5;
+	$DEF_WEIGHT = 0.2;
+	$HP_WEIGHT = 0.2;
 	$REC_WEIGHT = 0.1;
 	
 	//Individual Skill Weights
-	$LDR_SKILL_WEIGHT = 0.2;
-	$SYN_WEIGHT = 0.2;
-	$HIT_CNT_WEIGHT = 0.2;
-	$BB_WEIGHT = 0.2;
-	$BB_FILL_WEIGHT = 0.2;
+	//$LDR_SKILL_WEIGHT = 0.05;
+	//$SYN_WEIGHT = 0.05;
+	$HIT_CNT_WEIGHT = 0.3;
+	//$BB_WEIGHT = 0.05;
+	$BB_FILL_WEIGHT = 0.15;
+	$BB_HIT_WEIGHT = 0.2;
+	//$SBB_WEIGHT = 0.05;
+	$SBB_FILL_WEIGHT = 0.15;
+	$SBB_HIT_WEIGHT = 0.2;
 	
-	function normalize($value, $max_range, $min_range){
-		//this funciton normalizes the stats so it falls into a value between 1 and 10
-		//UNLESS 0 is submitted which will return 0
-		if($value == 0 || !is_int($value) ){
-			return 0;
+	if ( ! function_exists( 'normalize' ) ) {
+		function normalize($value, $max_range, $min_range, $invert = false){
+			//this funciton normalizes the stats so it falls into a value between 1 and 10
+			//UNLESS 0 is submitted which will return 0
+			if($value == 0 || !is_int($value) ){
+				return 0;
+			}
+			if($min_range == "" || !is_nan($min_range)){
+				$min_rnage = 0;
+			}
+			$value =  1 + ($value - $min_range) * ( 100-1 ) / ($max_range - $min_range);
+			if($invert){
+				$value = -$value + 100;	
+			}
+			return $value;
 		}
-		return 1 + ($value - $min_range) * ( 10-1 ) / ($max_range - $min_range);
 	}
-	
-	//Calculate the weighted value of the units
+
+	//Determine the min and max of each stat
+	$min_max = array(
+		'max_hp' => 0,
+		'min_hp' => 10000,
+		'max_atk' => 0,
+		'min_atk' => 10000,
+		'max_def' => 0,
+		'min_def' => 10000,
+		'max_rec' => 0,
+		'min_rec' => 10000,
+		'max_hit_count' => 0, 
+		'min_hit_count' => 100,
+		'max_bb_fill' => 0,
+		'min_bb_fill' => 0,
+		'max_sbb_fill' => 0,
+		'min_sbb_fill' => 0,
+		'max_bb_hits' => 0,
+		'min_bb_hits' => 0,
+		'max_sbb_hits' => 0,
+		'min_sbb_hits' => 0,
+		'max_votes' => 0,
+		'min_votes' => 1000,
+	);
+
 	$args = array(
 		'post_type'		=> 'unit',
 		'posts_per_page' => -1
 	);
+
 	$units = new WP_Query( $args );
 	if( $units->have_posts() ) : 
 		while( $units->have_posts() ) : $units->the_post();
-			
-			$weighted_value = ( ((get_field('lord_atk') * $ATK_WEIGHT) + (get_field('lord_def') * $DEF_WEIGHT) +
-			(get_field('lord_hp') * $HP_WEIGHT) + (get_field('lord_rec') * $REC_WEIGHT)) * $STAT_WEIGHT ) +
-			( ((get_field('ldr_skill_value') * $LDR_SKILL_WEIGHT) + (get_field('synergy_val') * $SYN_WEIGHT) +
-			(get_field('hit_count') * $HIT_CNT_WEIGHT) + (get_field('bb_fill') * $BB_FILL_WEIGHT) + 
-			(get_field('bb_value') * $BB_WEIGHT)) * $SKILL_WEIGHT ) +
-			( (get_field('upvotes') - get_field('downvotes') ) * $VOTE_WEIGHT);
+			$min_max['max_hp'] = (get_field('lord_hp') > $min_max['max_hp']) ? get_field('lord_hp') : $min_max['max_hp'];
+			$min_max['min_hp'] = (get_field('lord_hp') < $min_max['min_hp']) ? get_field('lord_hp') : $min_max['min_hp'];
+			$min_max['max_atk'] = (get_field('lord_atk') > $min_max['max_atk']) ? get_field('lord_atk') : $min_max['max_atk'];
+			$min_max['min_atk'] = (get_field('lord_atk') < $min_max['min_atk']) ? get_field('lord_atk') : $min_max['min_atk'];
+			$min_max['max_def'] = (get_field('lord_def') > $min_max['max_def']) ? get_field('lord_def') : $min_max['max_def'];
+			$min_max['min_def'] = (get_field('lord_def') < $min_max['min_def']) ? get_field('lord_def') : $min_max['min_def'];
+			$min_max['max_rec'] = (get_field('lord_rec') > $min_max['max_rec']) ? get_field('lord_rec') : $min_max['max_rec'];
+			$min_max['min_rec'] = (get_field('lord_rec') < $min_max['min_rec']) ? get_field('lord_rec') : $min_max['min_rec'];
+			$min_max['max_hit_count'] = (get_field('hit_count') > $min_max['max_hit_count']) ? get_field('hit_count') : $min_max['max_hit_count'];
+			$min_max['min_hit_count'] = (get_field('hit_count') < $min_max['min_hit_count']) ? get_field('hit_count') : $min_max['min_hit_count'];
+			//if( (int)get_field('bb_fill') > 0 ){
+				$min_max['max_bb_fill'] = (get_field('bb_fill') > $min_max['max_bb_fill']) ? get_field('bb_fill') : $min_max['max_bb_fill'];
+				//$min_max['min_bb_fill'] = (get_field('bb_fill') < $min_max['min_bb_fill']) ? get_field('bb_fill') : $min_max['min_bb_fill'];
+			//}
+			//if( (int)get_field('sbb_fill') > 0 ){
+				$min_max['max_sbb_fill'] = (get_field('sbb_fill') > $min_max['max_sbb_fill']) ? get_field('sbb_fill') : $min_max['max_sbb_fill'];
+				//$min_max['min_sbb_fill'] = (get_field('sbb_fill') < $min_max['min_sbb_fill']) ? get_field('sbb_fill') : $min_max['min_sbb_fill'];
+			//}
+			//if( (int)get_field('bb_hits') > 0 ){
+				$min_max['max_bb_hits'] = (get_field('bb_hits') > $min_max['max_bb_hits']) ? get_field('bb_hits') : $min_max['max_bb_hits'];
+				//$min_max['min_bb_hits'] = (get_field('bb_hits') < $min_max['min_bb_hits']) ? get_field('bb_hits') : $min_max['min_bb_hits'];
+			//}
+			//if( (int)get_field('sbb_hits') > 0 ){
+				$min_max['max_sbb_hits'] = (get_field('sbb_hits') > $min_max['max_sbb_hits']) ? get_field('sbb_hits') : $min_max['max_sbb_hits'];
+				//$min_max['min_sbb_hits'] = (get_field('sbb_hits') < $min_max['min_sbb_hits']) ? get_field('sbb_hits') : $min_max['min_sbb_hits'];
+			//}
+			$votes = (int)get_field('upvotes') - (int)get_field('downvotes');
+			$min_max['max_votes'] = ( $votes > $min_max['max_votes']) ? $votes : $min_max['max_votes'];
+			$min_max['min_votes'] = ( $votes < $min_max['min_votes']) ? $votes : $min_max['min_votes'];
+				
+		endwhile;
+	endif;
+	wp_reset_postdata();
+	//Debugging
+	echo "Version: " . $VERSION . "<br/>";
+	var_dump($min_max);
+	echo "<br/><br/>";
+
+	//echo get_field('upvotes', 349) - get_field('downvotes', 349) . "<br>";
+	//Calculate the weighted value of the units
+	if( $units->have_posts() ) : 
+		while( $units->have_posts() ) : $units->the_post();
+			$votes = get_field('upvotes') - get_field('downvotes');
+			$weighted_value = ( (
+					(normalize((int)get_field('lord_atk'), $min_max['max_atk'], $min_max['min_atk']) * $ATK_WEIGHT) + 
+					(normalize((int)get_field('lord_def'), $min_max['max_def'], $min_max['min_def']) * $DEF_WEIGHT) +
+					(normalize((int)get_field('lord_hp'), $min_max['max_hp'], $min_max['min_hp']) * $HP_WEIGHT) + 
+					(normalize((int)get_field('lord_rec'), $min_max['max_rec'], $min_max['min_rec']) * $REC_WEIGHT)
+				) *	$STAT_WEIGHT ) +
+				( (
+					//These skills are not available in the database yet...
+					//(get_field('ldr_skill_value') * $LDR_SKILL_WEIGHT) + (get_field('synergy_val') * $SYN_WEIGHT) +
+					(normalize((int)get_field('hit_count'), $min_max['max_hit_count'], $min_max['min_hit_count']) * $HIT_CNT_WEIGHT) + 
+					(normalize((int)get_field('bb_fill'), $min_max['max_bb_fill'], $min_max['min_bb_fill'], true) * $BB_FILL_WEIGHT) + 
+					(normalize((int)get_field('sbb_fill'), $min_max['max_sbb_fill'], $min_max['min_sbb_fill'], true) * $SBB_FILL_WEIGHT) + 
+					(normalize((int)get_field('bb_hits'), $min_max['max_bb_hits'], $min_max['min_bb_hits']) * $BB_HIT_WEIGHT) +
+					(normalize((int)get_field('sbb_hits'),  $min_max['max_sbb_hits'], $min_max['min_sbb_hits']) * $SBB_HIT_WEIGHT)
+				) * $SKILL_WEIGHT ) +
+				( normalize((int)$votes, $min_max['max_votes'], $min_max['min_votes']) * $VOTE_WEIGHT);
 			//Add niche later...;
-			
 			//Update the weighted value of the unit
 			update_field('weighted_value', $weighted_value, get_the_ID());
-		
+			
+			if (get_the_ID() == 428){
+				echo "Scores for Cyclopean Ultor<br/>";
+				echo "Raw Attack Score: " . normalize((int)get_field('lord_atk'), $min_max['max_atk'], $min_max['min_atk']) ."<br/>";
+				echo "Raw Defense Score: " . normalize((int)get_field('lord_def'), $min_max['max_def'], $min_max['min_def']) ."<br/>";
+				echo "Raw HP Score: " . normalize((int)get_field('lord_hp'), $min_max['max_hp'], $min_max['min_hp']) ."<br/>";
+				echo "Raw Recovery Score: " . normalize((int)get_field('lord_rec'), $min_max['max_rec'], $min_max['min_rec']) ."<br/>";
+				echo "Raw Hit Count Score: " . normalize((int)get_field('hit_count'), $min_max['max_hit_count'], $min_max['min_hit_count']) ."<br/>";
+				echo "Raw BB Hit Score: " . normalize((int)get_field('bb_hits'), $min_max['max_bb_hits'], $min_max['min_bb_hits']) ."<br/>";
+				echo "Raw BB Fill Score: " . normalize((int)get_field('bb_fill'), $min_max['max_bb_fill'], $min_max['min_bb_fill'], true) ."<br/>";
+				echo "Raw SBB Hit Score: " . normalize((int)get_field('sbb_hits'),  $min_max['max_sbb_hits'], $min_max['min_sbb_hits']) ."<br/>";
+				echo "Raw SBB Fill Score: " . normalize((int)get_field('sbb_fill'), $min_max['max_sbb_fill'], $min_max['min_sbb_fill'], true) ."<br/>";
+				echo "Raw Votes Score: " . normalize((int)$votes, $min_max['max_votes'], $min_max['min_votes']) ."<br/>";
+				echo "Weighted: " . $weighted_value ."<br/>";
+				echo "Stat Score: " . ((
+					(normalize((int)get_field('lord_atk'), $min_max['max_atk'], $min_max['min_atk']) * $ATK_WEIGHT) + 
+					(normalize((int)get_field('lord_def'), $min_max['max_def'], $min_max['min_def']) * $DEF_WEIGHT) +
+					(normalize((int)get_field('lord_hp'), $min_max['max_hp'], $min_max['min_hp']) * $HP_WEIGHT) + 
+					(normalize((int)get_field('lord_rec'), $min_max['max_rec'], $min_max['min_rec']) * $REC_WEIGHT)
+				) *	$STAT_WEIGHT) . "<br/>";
+				echo "Skill Score: " . ( (
+					//These skills are not available in the database yet...
+					//(get_field('ldr_skill_value') * $LDR_SKILL_WEIGHT) + (get_field('synergy_val') * $SYN_WEIGHT) +
+					(normalize((int)get_field('hit_count'), $min_max['max_hit_count'], $min_max['min_hit_count']) * $HIT_CNT_WEIGHT) + 
+					(normalize((int)get_field('bb_fill'), $min_max['max_bb_fill'], $min_max['min_bb_fill'], true) * $BB_FILL_WEIGHT) + 
+					(normalize((int)get_field('sbb_fill'), $min_max['max_sbb_fill'], $min_max['min_sbb_fill'], true) * $SBB_FILL_WEIGHT) + 
+					(normalize((int)get_field('bb_hits'), $min_max['max_bb_hits'], $min_max['min_bb_hits']) * $BB_HIT_WEIGHT) +
+					(normalize((int)get_field('sbb_hits'),  $min_max['max_sbb_hits'], $min_max['min_sbb_hits']) * $SBB_HIT_WEIGHT)
+				) * $SKILL_WEIGHT ) . "<br/>";
+			}
+			
 		endwhile;
 	endif;
 	wp_reset_postdata();
@@ -126,12 +228,31 @@ Version: 0.0.4
 	$units = new WP_Query( $args );
 	if( $units->have_posts() ) : 
 		$rank = 1;
+		$count = wp_count_posts('unit')->publish;
 		while( $units->have_posts() ) : $units->the_post();
 			update_field('rank', $rank, get_the_ID());
+			if($rank / $count < 0.09){
+				$tier = "Godly Tier";
+			}elseif($rank / $count < 0.19){
+				$tier = "Borderline 1 Tier";
+			}elseif($rank / $count < 0.3){
+				$tier = "Tier 1";
+			}elseif($rank / $count < 0.42){
+				$tier = "Borderline 2 Tier";
+			}elseif($rank / $count < 0.62){
+				$tier = "Tier 2";
+			}elseif($rank / $count < 0.77){
+				$tier = "Borderline 3 Tier";
+			}else{
+				$tier = "Tier 3";
+			}
+			update_field('tier', $tier, get_the_ID());
 			$rank++;
 		endwhile;
 	endif;
 	wp_reset_postdata();
+
+	endif; //END IF FOR DEVELOPMENT MODE
 	//Default full width display for pages in this theme.  
     //We display the content from the post first then display the float table after words.
 ?>
@@ -217,7 +338,7 @@ Version: 0.0.4
                     	<?php the_post_thumbnail( array(50, 50) ); ?>
                     	<a href="<?php the_permalink(); ?>" title="<?php the_title_attribute(); ?>"><?php the_title(); ?></a>
                     </td>
-                    <td class="column-3">Add tiers...</td>
+                    <td class="column-3"><?php the_field('tier');?></td>
                     <td class="column-4"><?php the_field('element');?></td>
                     <td class="column-5"><?php the_field('lord_hp');?></td>
                     <td class="column-6"><?php the_field('lord_atk');?></td>
