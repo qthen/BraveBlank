@@ -24,12 +24,12 @@ Template Name: Vote Float Table
 			if ($action == 1) {
 				//The user is upvoting so cast the upvote
 				$upvotes = get_field('upvotes', $id) + 1;
-				update_field('upvotes', $upvotes, $id);
+				update_field('field_54999edc9611e', $upvotes, $id);
 			}
 			else {
 				//The user is downvoting
 				$downvotes = get_field('downvotes', $id) + 1;
-				update_field('downvotes', $downvotes, $id);
+				update_field('field_54999f2b9611f', $downvotes, $id);
 			}
 			array_push($unit_array, $id);
 			$unit_array = implode(',', $unit_array);
@@ -85,6 +85,25 @@ Template Name: Vote Float Table
 				$value = -$value + 100;	
 			}
 			return $value;
+		}
+	}
+
+	if ( ! function_exists( 'normalize' ) ) {
+		function acf_field_key($params = array(), $field_name) {
+			
+			if (empty($params) or !isset($params['fields'])) {
+				
+				return $field_name;
+			}
+			
+			// Loop and find the value
+			foreach ($params['fields'] as $field) {
+				
+				if ($field['name'] == $field_name) {
+					
+					return $field['key'];
+				}
+			}
 		}
 	}
 
@@ -181,7 +200,7 @@ Template Name: Vote Float Table
 				( normalize((int)$votes, $min_max['max_votes'], $min_max['min_votes']) * $VOTE_WEIGHT);
 			//Add niche later...;
 			//Update the weighted value of the unit
-			update_field('weighted_value', $weighted_value, get_the_ID());
+			update_field('field_54999fdb96120', $weighted_value, get_the_ID());
 			
 			if (get_the_ID() == 428){
 				echo "Scores for Cyclopean Ultor<br/>";
@@ -230,7 +249,7 @@ Template Name: Vote Float Table
 		$rank = 1;
 		$count = wp_count_posts('unit')->publish;
 		while( $units->have_posts() ) : $units->the_post();
-			update_field('rank', $rank, get_the_ID());
+			update_field('field_54999c5b9611c', $rank, get_the_ID());
 			if($rank / $count < 0.09){
 				$tier = "Godly Tier";
 			}elseif($rank / $count < 0.19){
@@ -246,7 +265,7 @@ Template Name: Vote Float Table
 			}else{
 				$tier = "Tier 3";
 			}
-			update_field('tier', $tier, get_the_ID());
+			update_field('field_54a190f64b9fa', $tier, get_the_ID());
 			$rank++;
 		endwhile;
 	endif;

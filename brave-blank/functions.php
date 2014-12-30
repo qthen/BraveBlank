@@ -40,6 +40,11 @@
 
     Version 0.1.0
     Moved unit update calculations to a scheduled task in function.php
+
+    Version 0.1.1 
+    -Bug fixes:
+        - Post content update on Unit Submit page
+        - Use field_key instead of field_name for update_field()
 */
 
 //Child Theme Includes
