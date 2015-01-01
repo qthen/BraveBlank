@@ -1,11 +1,10 @@
 <?php
 //Squad Suggester App
 /*
-v.0.01 - Jan 1, 2015
+v.0.01
 A few ideas is to create a formula or created a score for every single unit based on the table vote or some other system. 
 Then this PHP script (or Python, I'll communicate the scripts through JSON decode and encode) will calculate the submitted units the user already has and suggest the squad wiht the highest score
 I think treating the squad as a single "unit" will be the easiest to do. 
-I also thought of perhaps modelling a function for every single unit. For example, any unit that is classified as a "healer" will have a function similar to sqrt(x) or log(x). Basically, a function that slows down quickly due ot decreasing returns from having more and more healers on a team
 
 DECIDED TO FOCUS THIS ON MAXWELL AND LATER EXPAND IT FOR SIMPLICTY
 
@@ -17,6 +16,7 @@ if (isset($_POST['submit'])) {
 	require_once('connectvars.php');
 	$dbc = mysqli_connect(HOST, USER, PASS, 'kuhaku_voting')
 	or die ("Error connecting to database");
+	
 	$units_array = explode(", ", $_POST['units']);
 
 
