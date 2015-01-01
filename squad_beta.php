@@ -4,7 +4,7 @@
 Some quick intro info:
 The connection variables are for another database, not wordpress. Will change that soon
 
-v.0.01 - Jan 1, 2015
+v.0.01 - Jan 1, 2015:
 A few ideas is to create a formula or created a score for every single unit based on the table vote or some other system. 
 Then this PHP script (or Python, I'll communicate the scripts through JSON decode and encode) will calculate the submitted units the user already has and suggest the squad wiht the highest score
 I think treating the squad as a single "unit" will be the easiest to do. 
@@ -22,6 +22,8 @@ The user types in "Creator Maxwell". Preform SQL search where "Creator Maxwell" 
 <a href="http://touchandswipe.github.io/bravefrontier/unitsguide.html?unit=Creator%20Maxwell"><img src = "http://braveblank.com/wp-content/uploads/2014/11/creator-maxwell.png"alt = "" width = "50" height ="50" class="alignleft size-full wp-image-45" /><b>Creator Maxwell</b></a>
 Another option might be through AngularJS or Ajax, but I have no idea how to do it at my current level. For now, this is what I have:
 I'M GOING TO CREATE A MYSQL TABLE FOR THE RAW UNIT DATA SOON. IM VERY LAZY -_-
+Still trying to figure out how to get leader skill values... This  may be difficult...
+
  */
 error_reporting(-1);
 ini_set('display_errors', 'On');
@@ -46,31 +48,15 @@ function atk_weight($x) {
 function max_possible_def() {
 
 }
-function stat_array($units_array, $unit_data_array, $stat) {
-	//This function takes two arguments. An array of unit names, and the array that stores the unit database. It will use the second argument to determine the highest possible sum of atk from the first argument. The third arguments specifies the stat that we are ordering
+function stat_array($units_array, $unit_data_array) {
+	//This function takes two arguments. An array of unit names, and the array that stores the unit database. It will use the second argument to determine the stats for the units that the user has entered. By doing it this way, we can echo out a personal error message if the search fails
 	$statarray = array();
-	switch($stat) {
-		case "hp" || "HP" :
-		$keysearch = 0;
-		break;
-		case "atk" || "ATK":
-		$keysearch = 1;
-		break;
-		case "def" || "DEF";
-		$keysearch = 2;
-		break;
-		case "rec" || "REC":
-		$keysearch = 3;
-		break;
-		default:
-		return false;
-	}
 	foreach($units_array as $unitname) {
 		if (!array_key_exists($unitname, $unit_data_array)) {
 			echo "Unable to find $unitname in our database. Please ensure you have spelt it correctly or report a bug";
 		}
 		else {
-			$statarray[$unitname] = $unit_data_array[$unitname][$keysearch];
+			$statarray[$unitname] = $unit_data_array[$unitname];
 		}
 	}
 	return $statarray;
@@ -94,7 +80,8 @@ if (isset($_POST['submit'])) {
 		unitname => array(hp, atk, def, rec));
 	*/
 	$units_array = explode(", ", $_POST['units']);
-	print_r(stat_array($units_array, $unit_data_array, "hp"));
+	$unsortedstatarray = stat_array($units_array, $unit_data_array);
+
 
 }
 ?>
