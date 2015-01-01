@@ -22,6 +22,7 @@ The user types in "Creator Maxwell". Preform SQL search where "Creator Maxwell" 
 <a href="http://touchandswipe.github.io/bravefrontier/unitsguide.html?unit=Creator%20Maxwell"><img src = "http://braveblank.com/wp-content/uploads/2014/11/creator-maxwell.png"alt = "" width = "50" height ="50" class="alignleft size-full wp-image-45" /><b>Creator Maxwell</b></a>
 Another option might be through AngularJS or Ajax, but I have no idea how to do it at my current level. For now, this is what I have:
 I'M GOING TO CREATE A MYSQL TABLE FOR THE RAW UNIT DATA SOON. IM VERY LAZY -_-
+
 Still trying to figure out how to get leader skill values... This  may be difficult...
 
  */
@@ -30,9 +31,51 @@ ini_set('display_errors', 'On');
 require_once('connectvars.php');
 $dbc = mysqli_connect(SHUFFLR_DATA_HOST, SHUFFLR_DATA_USER, SHUFFLR_DATA_PASS, SHUFFLR_DATA_DATABASE)
 or die ("Error connecting to database");
+//Constants defined now
+define('HP_BASE', 1.00208);
+define('HP_EXP_ABOVE', 0.91);
+define('REC_EXP', 0.9);
 //Function declaration begins now --------------------------------------------------------------------------------------------------
 function fetch_unitname($unitstr) {
 	return explode("</b>", explode("<b>", $unitstr)[1])[0];
+}
+function point_of_intersection($equation1, $equation2) {
+	$sum = 1;
+	for ($x = 1;  $x <= 999999999; $x++) {
+		$hpscore_1 = pow(HP_SUM, $sum);
+		$hpscore_2 = pow($sum, HP_EXP_ABOVE) - 3000;
+		if ($hpscore_1 - $hpscore_2 < 5) {
+			//They are not apporximately equal
+			break;
+		}	
+		else {
+			continue;
+		}
+	}
+}
+function assign_score($sum, $type) {
+	switch($type){
+		case"atk" || "ATK":
+			return pow($sum, 0.95); //This growth shows decreasing marginal returns as it increases
+			break;
+		case "def" || "DEF":
+			return $sum; //DEF is always important
+			break;
+		case "hp" || "HP":
+			$hpscore_1 = pow(HP_SUM, $sum);
+			$hpscore_2 = pow($sum, HP_EXP_ABOVE) - 3000;
+			$intersection = point_of_intersection($hpscore_1, $hpscore_2);
+			if ($sum < $intersection) {
+				return pow(HP_SUM, $sum);
+			}	
+			else {
+				return pow($sum, HP_EXP_ABOVE) - 3000;
+			}
+			break;
+		case "rec" || "REC":
+			return pow($sum, REC_EXP);
+			break;
+	}
 }
 function fetch_raw_value($hp, $atk, $def, $rec) {
 	$statsarray = array(); //Array to hold the stats for after commas have been removed and can be analyzed as an int in PHP
@@ -72,6 +115,27 @@ function enumerate_array() {
 	}
 	return $unit_data_array; //This array now holds all the unitnames without the HTML strings and their stats without the commas
 }
+function find_sum($array, $stat) {
+	$sum = 0;
+	switch($stat) {
+		case "hp" || "HP":
+		$keysum = 0;
+		break;
+		case "atk" || "ATK":
+		$keysum = 1;
+		break;
+		case "def" || "DEF":
+		$keysum = 2;
+		break;
+		case "rec" || "REC":
+		$keysum = 3;
+		breakl;
+	}
+	foreach ($array as $key => $array_to_sum) {
+			$sum += $array[$key][$keysum];
+	}
+	return $sum;
+}
 //Function declaration ends now ----------------------------------------------------------------------------------------------------
 if (isset($_POST['submit'])) {	
 	$unit_data_array = enumerate_array();
@@ -81,8 +145,7 @@ if (isset($_POST['submit'])) {
 	*/
 	$units_array = explode(", ", $_POST['units']);
 	$unsortedstatarray = stat_array($units_array, $unit_data_array);
-
-
+	print_r($unsortedstatarray);
 }
 ?>
 <html>
