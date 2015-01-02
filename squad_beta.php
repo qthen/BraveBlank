@@ -25,24 +25,40 @@ I'M GOING TO CREATE A MYSQL TABLE FOR THE RAW UNIT DATA SOON. IM VERY LAZY -_-
 
 Still trying to figure out how to get leader skill values... This  may be difficult...
 
+0.03 -- Proof of concept working!
+Ok, so basically i did a very lazy way of grading the units. You can see from the code that i just opened up a "bonus" array for the special units that are especially good against maxwell (i.e. Lilith and Grahdens). We might reach out to the communtiy to get a general consensus of whats good or not, but that's what I have so far. You can see a proof of concept version here:
+http://www.braveblank.com/squad-suggester-poc/
+
  */
 error_reporting(-1);
 ini_set('display_errors', 'On');
 require_once('connectvars.php');
-$dbc = mysqli_connect(SHUFFLR_DATA_HOST, SHUFFLR_DATA_USER, SHUFFLR_DATA_PASS, SHUFFLR_DATA_DATABASE)
+$dbc = mysqli_connect('localhost', USER, PASS, 'kuhaku_voting')
 or die ("Error connecting to database");
 //Constants defined now
-define('HP_BASE', 1.00208);
+define('HP_BASE', 1.00028);
 define('HP_EXP_ABOVE', 0.91);
 define('REC_EXP', 0.9);
+//Declaration of unit arrays needed or data calculation begins now--------------------------------------------------------------
+$units = array(
+	"Alpha Tree Altri" => array(1.45, "Healer"),
+	"Grahdens" => array(1.2, "Leader"),
+	"Terminator Lilith" => array(1.2, "Synergy"),
+	"Tyrant Lilly Matah" => array(1.5, "Leader"),
+	"Creator Maxwell" => array(1.05, "Synergy"), 
+	"Lightning Gun Rowgen" => array(1.22, "Synergy"), 
+	"Guardian Darvanshel" => array(1.45, "Synergy"),
+	"Mad God Narza" => array(1.45, "Synergy"),
+	"Colossal Tridon" => array(1.08, "Synergy"));
 //Function declaration begins now --------------------------------------------------------------------------------------------------
 function fetch_unitname($unitstr) {
 	return explode("</b>", explode("<b>", $unitstr)[1])[0];
 }
 function point_of_intersection($equation1, $equation2) {
+	//stil trying to figure out how to do this...
 	$sum = 1;
 	for ($x = 1;  $x <= 999999999; $x++) {
-		$hpscore_1 = pow(HP_SUM, $sum);
+		$hpscore_1 = pow(HP_BASE, $sum);
 		$hpscore_2 = pow($sum, HP_EXP_ABOVE) - 3000;
 		if ($hpscore_1 - $hpscore_2 < 5) {
 			//They are not apporximately equal
@@ -55,24 +71,23 @@ function point_of_intersection($equation1, $equation2) {
 }
 function assign_score($sum, $type) {
 	switch($type){
-		case"atk" || "ATK":
+		case"atk":
 			return pow($sum, 0.95); //This growth shows decreasing marginal returns as it increases
 			break;
-		case "def" || "DEF":
+		case "def":
 			return $sum; //DEF is always important
 			break;
-		case "hp" || "HP":
-			$hpscore_1 = pow(HP_SUM, $sum);
+		case "hp":
+			$hpscore_1 = pow(HP_BASE, $sum);
 			$hpscore_2 = pow($sum, HP_EXP_ABOVE) - 3000;
-			$intersection = point_of_intersection($hpscore_1, $hpscore_2);
-			if ($sum < $intersection) {
-				return pow(HP_SUM, $sum);
+			if ($sum < 32000) {
+				return pow(HP_BASE, $sum);
 			}	
 			else {
 				return pow($sum, HP_EXP_ABOVE) - 3000;
 			}
 			break;
-		case "rec" || "REC":
+		case "rec":
 			return pow($sum, REC_EXP);
 			break;
 	}
@@ -105,9 +120,12 @@ function stat_array($units_array, $unit_data_array) {
 	return $statarray;
 }
 function enumerate_array() {
-	global $dbc;
+	$dbc = mysqli_connect('localhost', USER, PASS, 'kuhaku_voting')
+	or die ("Error connecting to database");
 	$unit_data_array = array();
-	$selectall = mysqli_query($dbc, "SELECT unit, hp, atk, def, rec FROM units"); //SELECT all the units in the database and begin to parse them by removing the HTML tags in the unitname and the commas from the stats so they can be treated as ints
+	mysqli_query($dbc, "SELECT * from units")
+	or (print(mysqli_error($dbc)));
+	$selectall = mysqli_query($dbc, "SELECT Unit, HP, ATK, DEF, REC FROM units"); //SELECT all the units in the database and begin to parse them by removing the HTML tags in the unitname and the commas from the stats so they can be treated as ints
 	while ($row = mysqli_fetch_array($selectall, MYSQLI_NUM)) {
 		list($unitstring, $hp, $atk, $def, $rec) = $row;
 		$unitname = fetch_unitname($unitstring);
@@ -129,12 +147,35 @@ function find_sum($array, $stat) {
 		break;
 		case "rec" || "REC":
 		$keysum = 3;
-		breakl;
+		break;
 	}
 	foreach ($array as $key => $array_to_sum) {
 			$sum += $array[$key][$keysum];
 	}
 	return $sum;
+}
+function sort_array($array, $stat) {
+	//Function to sort array based on provided arguments , the array and the type (which stat)
+	switch($stat) {
+		case "hp":
+		$keysum = 0;
+		break;
+		case "atk":
+		$keysum = 1;
+		break;
+		case "def":
+		$keysum = 2;
+		break;
+		case "rec":
+		$keysum = 3;
+		break;
+	}
+	$sortedarray = array();
+	foreach ($array as $key => $val) {
+		$sortedarray[$key] = $val[$keysum];
+	}
+	array_multisort($sortedarray, SORT_DESC, $array);
+	return($sortedarray);
 }
 //Function declaration ends now ----------------------------------------------------------------------------------------------------
 if (isset($_POST['submit'])) {	
@@ -143,16 +184,72 @@ if (isset($_POST['submit'])) {
 	array(
 		unitname => array(hp, atk, def, rec));
 	*/
-	$units_array = explode(", ", $_POST['units']);
-	$unsortedstatarray = stat_array($units_array, $unit_data_array);
-	print_r($unsortedstatarray);
+	$units_array = explode(", ", $_POST['units']); //These are the units that the user has entered
+	$unsortedstatarray = stat_array($units_array, $unit_data_array); 
+	$stats = array("hp", "atk", "def", "rec");
+	//First assign a score to every single unit
+	$scoredarray = array();
+	foreach ($unsortedstatarray as $key => $val) {
+		$scoredarray[$key] = assign_score($val[0], "hp") + assign_score($val[1], "atk") + assign_score($val[2], "def") +assign_score($val[3], "rec");
+		//Assign the bonus if the unit is in the special unit array
+		if (array_key_exists($key, $units)) {
+			echo "assigned bonus for $key <br/>";
+			$scoredarray[$key] = $scoredarray[$key] * $units[$key][0];
+		}
+	}
+	arsort($scoredarray);//This array is the array of units scored by their importance. Now, we will search for a viable leader
+	$top10 = array_slice($scoredarray, 0, 10);
+	$idealsquad = array_slice($scoredarray, 0, 6);
+	//Find the leaders
+	$leaderarray = array();
+	$x = 0;
+	foreach ($top10 as $key => $val) {
+		if (array_key_exists($key, $units) && $units[$key][1] == "Leader" && $x < 2) {
+			$leaderarray[$key] = $val;
+			$x++;
+		}
+	}
+	//Now search all units if no leader was found
+	if ($x != 2) {
+		foreach($scoredarray as $key => $val) {
+			if (array_key_exists($key, $units) && $x < 2 && $units[$key][1] == "Leader" ) {
+					$leaderarray[$key] = $val;
+					$x++;				
+			}
+		} 
+	}
+	if ($x!= 2) {
+		foreach($scoredarray as $key => $val) {
+			if (array_key_exists($key, $units) && $x < 2 && ($units[$key][1] == "Leader" || $units[$key][1] == "Synergy")) {
+					$leaderarray[$key] = $val;
+					$x++;				
+			}
+		} 
+	}
+	if ($x!= 2) {
+		//No leaders present, just suggest the top unit score as leader than
+		$top = array_slice($scoredarray, 0, 1);
+		foreach ($top as $key => $val) {
+			$leaderarray[$key] = $val;
+		}
+	}
+	//Now just grab the top 4 units that are not in the leader array depending on how many units left
+	$scoredarraynoleader = array_diff_key($scoredarray, $leaderarray);
+	$suggestedsquad = array_slice($scoredarraynoleader, 0, 4);
+	echo "<h2>Suggested Squad is:</h2>";;
+	foreach ($leaderarray as $key => $val) {
+		echo "$key (Leader)<br/>";
+	}
+	foreach($suggestedsquad as $key => $val) {
+		echo "$key<br/>";
+	}
 }
 ?>
 <html>
-<form method="post" action="<?php echo $_SERVER['PHP_SELF'];?>">
+<form method="post" action="http://www.braveblank.com/squad-suggester-poc/">
 <p>
-Units (please seperate by comma)<br/>
-<textarea name="units" value="<?php echo $_POST['units'];?>" style="width:500px;height:500px;">
+Units (please seperate by comma)
+<textarea name="units" style="width:500px;height:500px;">
 </textarea>
 <input type="submit" value="Suggest Squad" name="submit">
 </form> 
