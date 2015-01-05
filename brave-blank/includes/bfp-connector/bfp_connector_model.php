@@ -59,35 +59,37 @@ function bfp_connector_model($options) {
 	}
 
 	$service = new Google_Service_Fusiontables($client);
-	$results = $service->query->sqlGet("SELECT * FROM " . $table_id . " WHERE ID=".$_POST['unit_number']); // ID=".$_POST['unit_number'])
-	var_dump($results);
+	$results = $service->query->sqlGet("SELECT * FROM " . $table_id . " WHERE 'Global Release'='true' AND ID=".$_POST['unit_number']); // ID=".$_POST['unit_number'])
+	//var_dump($results);
 	$log_messages = array();
-	foreach ($results['rows'] as $row) {
-		$unit_data = array(
-			'description'	=> "N/A",
-			'brave_burst'	=> "N/A",
-			'super_brave_burst'	=> "N/A",
-			'leader_skill'	=> "N/A",
-		);
-		$count = 0;
-		foreach ($row as $column_value){
-			$unit_data[$table_fields[$count]] = $column_value;
-			$count++;
-		}
-		$unit = new unitModel;
-		$unit_data = $unit->create_update_unit($unit_data);
-		if(isset($unit_data['success'])){
-			array_push($log_messages, $unit_data['success']);
-		}elseif(isset($unit_data['errors'])){
-			if(is_array($unit_data['errors'])){
-				foreach($unit_data['errors'] as $error){
-					array_push($log_messages, $error);
+	if( count($results['rows'])) != 0){
+		foreach ($results['rows'] as $row) {
+			$unit_data = array(
+				'description'	=> "N/A",
+				'brave_burst'	=> "N/A",
+				'super_brave_burst'	=> "N/A",
+				'leader_skill'	=> "N/A",
+			);
+			$count = 0;
+			foreach ($row as $column_value){
+				$unit_data[$table_fields[$count]] = $column_value;
+				$count++;
+			}
+			$unit = new unitModel;
+			$unit_data = $unit->create_update_unit($unit_data);
+			if(isset($unit_data['success'])){
+				array_push($log_messages, $unit_data['success']);
+			}elseif(isset($unit_data['errors'])){
+				if(is_array($unit_data['errors'])){
+					foreach($unit_data['errors'] as $error){
+						array_push($log_messages, $error);
+					}
+				}else{
+					array_push($log_messages, $unit_data['errors']);
 				}
 			}else{
-				array_push($log_messages, $unit_data['errors']);
+				array_push($log_messages, "Unit not updated or created.");
 			}
-		}else{
-			array_push($log_messages, "Unit not updated or created.");
 		}
 	}
 
