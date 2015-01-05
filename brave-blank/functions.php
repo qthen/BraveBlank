@@ -65,6 +65,9 @@
     - Moved Unit post type to include
     - Moved Cron to include
 
+    Version 0.1.7
+    - Added Unit roster creation tool
+
 */
 
 //Child Theme Includes

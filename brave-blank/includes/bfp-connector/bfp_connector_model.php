@@ -59,8 +59,8 @@ function bfp_connector_model($options) {
 	}
 
 	$service = new Google_Service_Fusiontables($client);
-	$results = $service->query->sqlGet("SELECT * FROM " . $table_id . " WHERE ID < 330 AND ID > 299"); // ID=".$_POST['unit_number'])
-	//var_dump($results);
+	$results = $service->query->sqlGet("SELECT * FROM " . $table_id . " WHERE ID=".$_POST['unit_number']); // ID=".$_POST['unit_number'])
+	var_dump($results);
 	$log_messages = array();
 	foreach ($results['rows'] as $row) {
 		$unit_data = array(
