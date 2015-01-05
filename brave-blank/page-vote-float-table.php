@@ -88,7 +88,7 @@ Template Name: Vote Float Table
 		}
 	}
 
-	if ( ! function_exists( 'normalize' ) ) {
+	if ( ! function_exists( 'acf_field_key' ) ) {
 		function acf_field_key($params = array(), $field_name) {
 			
 			if (empty($params) or !isset($params['fields'])) {
@@ -325,6 +325,14 @@ Template Name: Vote Float Table
 			wp_reset_postdata();
 			$args = array(
 				'post_type'		=> 'unit',
+				'meta_query'	=> array(
+					array(
+						'key'		=> 'rarity',
+						'value'		=> 4,
+						'type'		=> 'NUMERIC',
+						'compare'	=> '>'
+					)
+				),
 				'meta_key'		=> 'rank',
 				'orderby'		=> 'meta_value_num',
 				'order'			=> 'ASC',
