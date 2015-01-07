@@ -25,12 +25,24 @@ I'M GOING TO CREATE A MYSQL TABLE FOR THE RAW UNIT DATA SOON. IM VERY LAZY -_-
 
 Still trying to figure out how to get leader skill values... This  may be difficult...
 
-0.03 -- Proof of concept working!
+0.03-POC -- Proof of concept working!
 Ok, so basically i did a very lazy way of grading the units. You can see from the code that i just opened up a "bonus" array for the special units that are especially good against maxwell (i.e. Lilith and Grahdens). We might reach out to the communtiy to get a general consensus of whats good or not, but that's what I have so far. You can see a proof of concept version here:
 http://www.braveblank.com/squad-suggester-poc/
-
-0.04 -- Update Jan 2
+--------Beta Development Begins-------------------------------------------------------------------------------------------------
+0.01 Beta
 Added in the healer exclusion clause
+Added in skeleton of code for easier modification including constants for functions
+Reduced error messages echoed out
+
+0.02 Beta
+Fixed bug where Ice Fortress Oulu wasn't recognized
+Began reconstruction of raw MYSQL Database specifically for this app
+Added in diminish marginal units clause
+Added in Thief God Zelnite, God Engineer Garnan, Empyreal Drake Lodin bonus
+Added in bonus for Divine Light Alyut, Legatus Melchio, Lunaris. Added in role of helaer to Wordly Themis
+Added in function for exception clause bonuses <-- Still not working the way I want it to
+Added in an option to suggest more squads
+Fixed error where Duel-SGX was not found in database
 
  */
 error_reporting(-1);
@@ -58,17 +70,63 @@ $units = array(
 	"Colossal Tridon" => array(1.07, "Synergy", "Leader"),
 	"Ice Fortress Oulu" => array(1.8, "Mitigator", "Leader"),
 	"Duel SGX" => array(1.2, "Synergy"),
-	"Fire Goddess Ulkina" => array(2, "Healer"),
+	"Fire Goddess Ulkina" => array(2.2, "Healer"),
 	"Ice God Arius" => array(1.2, "Healer"),
 	"Guardian Goddess Tia" => array(1.3, "Healer"), 
 	"Goddess Axe Michele" => array(1.4, "Synergy"),
 	"Beast God Exvehl" => array(2, "Leader"),
-	"Empyreal Drak Lodin" => array(1.3, "Synergy"),
+	"Empyreal Drake Lodin" => array(1.35, "Synergy"),
 	"Ivy Goddess Nalmika" => array(1.2, "Synergy"),
 	"Thief God Zelnite" => array(1.18, "Synergy", "Leader"),
-	"God Engineer Garnan" => array());
+	"God Engineer Garnan" => array(1.2, "Snergy"),
+	"Divine Light Alyut" => array(1.15, "Synergy"),
+	"Wordly Themis" => array(2, "Healer"),
+	"Legatus Melchio" => array(1.3, "Synergy"),
+	"Black Lotus Lunaris" => array(1.15, "Synergy"),
+	"Duel-SGX" => array(1.1, "Synergy", "", "EXCEPTION1", 1.3),
+	"Mad God Zebra" => array(1.1, "Synergy", "Leader", "EXCEPTION1", 1.3, "Leader"),
+	"Felneus" => array(1.3, "Leader"), 
+	"Havoc Angel Ronel" => array(1.3, "Synergy", "Leader"),
+	"Blazing Mare" => array(1, "Synergy", "Leader")
+	);
 $squad_template = array("Leader", "Mitigator", "Healer", "UnlimitedBB"); //Attempt to create this squad
 //Function declaration begins now --------------------------------------------------------------------------------------------------
+function assign_exception($scoredarray, $data_array, $units, $exception) {
+	//Uses three arguments. The first is the current scored array, the second is any needed additional data that will make this function faster, the unit database that contains the unit bonuses, and the fourth is the exception number that should be applied
+	$exceptionarray = array(); //Temporary holding array variable for modifiying the bonuses for exceptions
+	switch ($exception) {
+		case "EXCEPTION1":
+			if (array_key_exists('Duel-SGX', $scoredarray) && array_key_exists('Mad God Zebra', $scoredarray)) {
+				//These two units should create a leader-unit duo if their combined bonuses are not higher than the current leaders
+				$exceptionarray['Duel-SGX'] = $scoredarray['Duel-SGX'] * $units['Duel-SGX'][4];
+				$exceptionarray['Mad God Zebra'] = $scoredarray['Mad God Zebra'] * $units['Mad God Zebra'][4];
+				$x = array_sum($data_array);
+				$y = array_sum($exceptionarray);
+				if ($x < $y) {
+					//This means that the two current leaders are less than what they could be, so assign these duo into the scoredarray
+					$keytoreplace = array_search(min($data_array), $data_array); //Move the lowest scored leader in the leader array into the units array first
+					echo "imagine";
+					$scoredarray[$keytoreplace] = $data_array[$keytoreplace];
+					unset($data_array[$keytoreplace]);
+					$data_array['Mad God Zebra'] = $exceptionarray['Mad God Zebra'];
+					$scoredarray['Duel-SGX'] *= 500; //To guarantee that Duel-SGX will be assigned onto the team
+					unset($scoredarray['Mad God Zebra']);
+					arsort($scoredarray);
+					return array($data_array, $scoredarray);
+				}
+				else{
+					return array($data_array, $scoredarray);
+				}
+			}
+			else {
+				return array($data_array, $scoredarray);
+			}
+			break;
+		default:
+		return array($data_array, $scoredarray);
+		break;
+	}
+}
 function fetch_unitname($unitstr) {
 	return explode("</b>", explode("<b>", $unitstr)[1])[0];
 }
@@ -249,7 +307,6 @@ function assign_leaders($scoredarray, $units) {
 	//If still no leaders present, then search based on highest scored unit that is not a healer
 	if ($x < 2) {
 		$leaderstoadd = array_slice($scoredarray, 0, (2 - $x));
-		print_r($leaderstoadd);
 		foreach ($leaderstoadd as $key => $val) {
 			if (array_key_exists($key, $units) && $x < 2 && ($units[$key][1] == "Healer" || $units[$key][1] == "Mitigator")) {
 				//Do not assign this unit
@@ -264,7 +321,7 @@ function assign_leaders($scoredarray, $units) {
 	}
 	if ($x < 2) {
 		//If the number of leaders is still less than two, return this function as false
-		return false;
+		return $scoredarray;
 	}
 	return array($leaderarray, $scoredarray);
 }
@@ -326,86 +383,119 @@ function assign_unlimitedBB($scoredarray, $units) {
 }
 //Function declaration ends now ----------------------------------------------------------------------------------------------------
 if (isset($_POST['submit'])) {	
-	echo "<h3>Console Output</h3>";
+	echo "<hr>";
+	echo "<h3><center>Console Output</h3>";
+	$units_array = $_POST['units'];
+	$printed = false;
 	$unit_data_array = enumerate_array();
-	/*This array contains all the units with their name and stats and have been converted to string => ints for PHP modification or Python modification. The array is this:
-	array(
-		unitname => array(hp, atk, def, rec));
-	*/
-	$units_array = explode(", ", $_POST['units']); //These are the units that the user has entered
-	$unsortedstatarray = stat_array($units_array, $unit_data_array); 
-	$stats = array("hp", "atk", "def", "rec");
-	//First assign a score to every single unit:
-	$scoredarray = array(); //This is the array that will hold every single unit and their overall score
-	foreach ($unsortedstatarray as $key => $val) {
-		$scoredarray[$key] = assign_score($val[0], "hp") + assign_score($val[1], "atk") + assign_score($val[2], "def") +assign_score($val[3], "rec");
-		//Assign the bonus if the unit is in the special unit array
-		if (array_key_exists($key, $units)) {
-			$scoredarray[$key] = $scoredarray[$key] * $units[$key][0];
-		}
-	}
-	arsort($scoredarray);//This array is the array of units scored by their importance. Now, we will search for a viable leader
-	//Now we are going to attempt to assemble a squad that closely follows with the guidelines put in place from the provided squad templates. $result will be the temporary holding variable for holding the array of the units that the user has submitted while the array is undergoing modification
-	print_r($scoredarray);
-	$unitsneeded = 6;
-	foreach ($squad_template as $unittype) {
-			switch ($unittype) {
-				case "Leader":
-					$result = assign_leaders($scoredarray, $units);
-					if (!$result) {
-						//The function failed to find two leaders, this means less than two units were submitted. Echo out this error
-						echo 'Less than 2 units were submitted, please submit at least 2 units in order for this to work';
-						break 2;
-					}
-					else {
-						$leadersarray = $result[0];
-						$scoredarray = $result[1];
-						$unitsneeded -= count($leadersarray);
-					}
-					break;
-				case "Healer":
-					$result = assign_healer($scoredarray, $units);
-					$healer = $result[0];
-					$scoredarray = $result[1];
-					if (!$healer) {
-						//No healer was found
-						break;
-					}
-					else {
-						$healer = $result[0];
-						$unitsneeded--;
-						break;
-					}
-				case "UnlimitedBB":
-					$result = assign_unlimitedBB($scoredarray, $units);
-					$unlimitedBB = $result[0];
-					$scoredarray = $result[1];
-					if ($unlimitedBB) {
-						$unitsneeded--;
-					}
-					break;
+		/*This array contains all the units with their name and stats and have been converted to string => ints for PHP modification or Python modification. The array is this:
+		array(
+			unitname => array(hp, atk, def, rec));
+		*/
+	for ($x = 1; $x < ($_POST['squadnum'] + 1); $x++) {
+		if (!isset($scoredarray)) {
+			$units_array = explode(", ", $_POST['units']); //These are the units that the user has entered
+			$unsortedstatarray = stat_array($units_array, $unit_data_array); 
+			$stats = array("hp", "atk", "def", "rec");
+			//First assign a score to every single unit:
+			$scoredarray = array(); //This is the array that will hold every single unit and their overall score
+			foreach ($unsortedstatarray as $key => $val) {
+				$scoredarray[$key] = assign_score($val[0], "hp") + assign_score($val[1], "atk") + assign_score($val[2], "def") +assign_score($val[3], "rec");
+				//Assign the bonus if the unit is in the special unit array
+				if (array_key_exists($key, $units)) {
+					$scoredarray[$key] = $scoredarray[$key] * $units[$key][0];
+				}
 			}
-	}
-	$suggestedsquad = array_slice($scoredarray, 0, $unitsneeded);
-	echo "<h2>Suggested Squad is:</h2>";
-	foreach ($leadersarray as $key => $val) {
-		echo "$key (Leader)<br/>";
-	}
-	if ($healer) {
-		echo "$healer (Healer) <br/>";
-	}
-	if ($unlimitedBB) {
-		echo "$unlimitedBB <br/>";
-	}
-	foreach($suggestedsquad as $key => $val) {
-		echo "$key<br/>";
+		}
+		else{
+			$units_array = $scoredarray;
+		}
+		if (count($units_array) <= 2) {
+			//This means less than 2 units. just echo out these units as the leaders
+			foreach ($units_array as $key => $val) {
+				echo "<h2>Suggested Squad $x:</h2>";
+				echo "$key (Leader)";
+			}
+			break;
+		}
+		arsort($scoredarray);//This array is the array of units scored by their importance. Now, we will search for a viable leader
+		//Now we are going to attempt to assemble a squad that closely follows with the guidelines put in place from the provided squad templates. $result will be the temporary holding variable for holding the array of the units that the user has submitted while the array is undergoing modification
+		if (!$printed) {
+			print_r($scoredarray);
+			$printed = true;
+		}
+		$unitsneeded = 6;
+		foreach ($squad_template as $unittype) {
+				switch ($unittype) {
+					case "Leader":
+						$result = assign_leaders($scoredarray, $units);
+						if (!$result) {
+							//The function failed to find two leaders, this means less than two units were submitted. Echo out this error
+							echo 'Less than 2 units were submitted, please submit at least 2 units in order for this to work';
+							break 2;
+							//Apply exception1here							
+						}
+						else {
+							$leadersarray = $result[0];
+							$scoredarray = $result[1];
+							$unitsneeded -= count($leadersarray);
+							$result_exception1 = assign_exception($scoredarray, $leadersarray, $units, 'EXCEPTION1');
+							$leadersarray = $result_exception1[0];
+							$scoredarray = $result_exception1[1];
+							
+						}
+						break;
+					case "Healer":
+						$result = assign_healer($scoredarray, $units);
+						$healer = $result[0];
+						$scoredarray = $result[1];
+						if (!$healer) {
+							//No healer was found
+							break;
+						}
+						else {
+							$healer = $result[0];
+							$unitsneeded--;
+							break;
+						}
+					case "UnlimitedBB":
+						$result = assign_unlimitedBB($scoredarray, $units);
+						$unlimitedBB = $result[0];
+						$scoredarray = $result[1];
+						if ($unlimitedBB) {
+							$unitsneeded--;
+						}
+						break;
+				}
+		}
+		$suggestedsquad = array_slice($scoredarray, 0, $unitsneeded);
+		echo "<h2>Suggested Squad $x is:</h2>";
+		foreach ($leadersarray as $key => $val) {
+			echo "$key (Leader)<br/>";
+		}
+		if ($healer) {
+			echo "$healer (Healer) <br/>";
+		}
+		if ($unlimitedBB) {
+			echo "$unlimitedBB <br/>";
+		}
+		foreach($suggestedsquad as $key => $val) {
+			echo "$key<br/>";
+			unset($scoredarray[$key]);
+		}
 	}
 }
 ?>
 <html>
 <form method="post" action=".">
+<hr>
+<h4>Squad Suggester</h4>
+
 <p>
-Please enter in the units(seperate each unit name by commas with space) you wish to form a squad with. Ensure you spell the unit name exactly as it appears on the vote floating unit rankings <a href="http://www.braveblank.com/vote-floating-tier-ranking-brave-frontier-beta/">here</a> <br/>
+Please enter in the units (seperate each unit name by commas with space) you wish to form a squad with. Squads become more inaccruate the more squads you choose. Maxwell allows 3 squads, but you can ask the app to suggest a mazimum of 10. Ensure you spell the unit name correctly. Example: Tyrant Lilly Matah, Creator Maxwell, Thief God Zelnite<br/>
+<label for ="number">Number of Squads to Suggest:</label> 
+<input type="number" name="squadnum" min="1" max="10">
+Units
 <textarea name="units" style="width:500px;height:100px;" value="<?php if (!empty($_POST['units'])) { echo $_POST['units'];} else {
 	echo '';}?>"></textarea>
 <input type="submit" value="Suggest Squad" name="submit">
