@@ -1,5 +1,6 @@
 <?php
 //Squad Suggester App
+//CODE THE CRTICAIL HIT CLAUSE WHERE MORE UNITS WITH CRIT HIT SIDE EFFECTS SHOULD INCREASE THE SQUAD POINTS
 /*
 Some quick intro info:
 The connection variables are for another database, not wordpress. Will change that soon
@@ -43,14 +44,13 @@ Added in bonus for Divine Light Alyut, Legatus Melchio, Lunaris. Added in role o
 Added in function for exception clause bonuses <-- Still not working the way I want it to
 Added in an option to suggest more squads
 Fixed error where Duel-SGX was not found in database
-
- */
-error_reporting(-1);
+*/
 ini_set('display_errors', 'On');
 require_once('connectvars.php');
 $dbc = mysqli_connect('localhost', USER, PASS, 'kuhaku_voting')
 or die ("Error connecting to database");
 //Constants defined now
+define('IDEAL_TEAM', 50000);
 define('HP_BASE', 1.00028);
 define('HP_EXP_ABOVE', 0.91);
 define('REC_EXP', 0.9);
@@ -60,21 +60,21 @@ define('DIMINISH_MARGINAL_UNLIMITED_BB', 0.1); //This is to diminish the margina
 //Declaration of unit arrays needed or data calculation begins now--------------------------------------------------------------
 $units = array(
 	"Alpha Tree Altri" => array(3, "Healer"),
-	"Grahdens" => array(1.2, "Leader"),
+	"Grahdens" => array(2, "Leader"),
 	"Terminator Lilith" => array(1.5, "Synergy", "UnlimitedBB"),
 	"Tyrant Lilly Matah" => array(3, "Leader"),
 	"Creator Maxwell" => array(1.05, "Synergy", "Leader"), 
-	"Lightning Gun Rowgen" => array(1.5, "Synergy", "UnlimitedBB"), 
+	"Lightning Gun Rowgen" => array(1.7, "Synergy", "UnlimitedBB"), 
 	"Guardian Darvanshel" => array(2, "Mitigator", "Leader"),
 	"Mad God Narza" => array(2.2, "Mitigator", "Leader"),
-	"Colossal Tridon" => array(1.07, "Synergy", "Leader"),
+	"Colossal Tridon" => array(2.05, "Synergy", "Leader"),
 	"Ice Fortress Oulu" => array(1.8, "Mitigator", "Leader"),
 	"Duel SGX" => array(1.2, "Synergy"),
 	"Fire Goddess Ulkina" => array(2.2, "Healer"),
 	"Ice God Arius" => array(1.2, "Healer"),
-	"Guardian Goddess Tia" => array(1.3, "Healer"), 
-	"Goddess Axe Michele" => array(1.4, "Synergy"),
-	"Beast God Exvehl" => array(2, "Leader"),
+	"Guardian Goddess Tia" => array(1.4, "Healer"), 
+	"Goddess Axe Michele" => array(1.5, "Synergy"),
+	"Beast God Exvehl" => array(1.6, "Leader"),
 	"Empyreal Drake Lodin" => array(1.35, "Synergy"),
 	"Ivy Goddess Nalmika" => array(1.2, "Synergy"),
 	"Thief God Zelnite" => array(1.18, "Synergy", "Leader"),
@@ -87,7 +87,17 @@ $units = array(
 	"Mad God Zebra" => array(1.1, "Synergy", "Leader", "EXCEPTION1", 1.3, "Leader"),
 	"Felneus" => array(1.3, "Leader"), 
 	"Havoc Angel Ronel" => array(1.3, "Synergy", "Leader"),
-	"Blazing Mare" => array(1, "Synergy", "Leader")
+	"Blazing Mare" => array(1, "Synergy", "Leader"),
+	"Thunder Savior Shera" => array(2.8, "Mitigator", "Leader"),
+	"Phoenix God Arus" => array(1.5, "Synergy", "UnlimitedBB"),
+	"Thunder Sentry Shera" => array(1.5, "Mitigator", "Leader"),
+	"Divine Whip Orna" => array(1.105, "Synergy", "Leader"),
+	"Protector Darvanshel" => array(1.1, "Mitigator"),
+	"Empress Lilly Matah" => array(1.2, "Synergy", "Leader"),
+	"Master Assassin Kuda" => array(1.5, "Synergy", "Leader", "EXCEPTION2"),
+	"Snow Queen Eva" => array(1.4, "Synergy", "Leader"),
+	"Massacre God Belfura" => array(1.05, "Synergy"),
+	"Dark Demigod Ardin" => array(2.2, "Synergy", "Leader")
 	);
 $squad_template = array("Leader", "Mitigator", "Healer", "UnlimitedBB"); //Attempt to create this squad
 //Function declaration begins now --------------------------------------------------------------------------------------------------
@@ -182,6 +192,7 @@ function stat_array($units_array, $unit_data_array) {
 	foreach($units_array as $unitname) {
 		if (!array_key_exists($unitname, $unit_data_array)) {
 			echo "Unable to find $unitname in our database. Please ensure you have spelt it correctly or report a bug";
+			echo '<br/><a href=".?inputname=' . $unitname . '">Add unit: ' . $unitname . '?</a><br>';
 		}
 		else {
 			$statarray[$unitname] = $unit_data_array[$unitname];
@@ -195,10 +206,9 @@ function enumerate_array() {
 	$unit_data_array = array();
 	mysqli_query($dbc, "SELECT * from units")
 	or (print(mysqli_error($dbc)));
-	$selectall = mysqli_query($dbc, "SELECT Unit, HP, ATK, DEF, REC FROM units"); //SELECT all the units in the database and begin to parse them by removing the HTML tags in the unitname and the commas from the stats so they can be treated as ints
+	$selectall = mysqli_query($dbc, "SELECT name, hp, atk, def, rec FROM units_raw"); //SELECT all the units in the database and begin to parse them by removing the HTML tags in the unitname and the commas from the stats so they can be treated as ints
 	while ($row = mysqli_fetch_array($selectall, MYSQLI_NUM)) {
-		list($unitstring, $hp, $atk, $def, $rec) = $row;
-		$unitname = fetch_unitname($unitstring);
+		list($unitname, $hp, $atk, $def, $rec) = $row;
 		$unit_data_array["$unitname"] = fetch_raw_value($hp, $atk, $def, $rec);
 	}
 	return $unit_data_array; //This array now holds all the unitnames without the HTML strings and their stats without the commas
@@ -382,10 +392,20 @@ function assign_unlimitedBB($scoredarray, $units) {
 	return array($unlimitedBB, $scoredarray);
 }
 //Function declaration ends now ----------------------------------------------------------------------------------------------------
+if (isset($_GET['inputname'])) {
+	$inputname = mysqli_real_escape_string($dbc, trim($_GET['inputname']));
+	$parserequest = mysqli_query($dbc, "INSERT INTO add_unit VALUES ('$inputname')");
+	if (!$parserequest) {
+		echo '<font color="red">There was some error inserting the unit into the database.. Please try again letter. Sorry :(</font><br/>';
+	}
+	else {
+		echo 'Thanks for adding in ' . $_GET['inputname'] . ' !';
+	}
+}
 if (isset($_POST['submit'])) {	
 	echo "<hr>";
 	echo "<h3><center>Console Output</h3>";
-	$units_array = $_POST['units'];
+	$units_array = trim($_POST['units'], '<br />');
 	$printed = false;
 	$unit_data_array = enumerate_array();
 		/*This array contains all the units with their name and stats and have been converted to string => ints for PHP modification or Python modification. The array is this:
@@ -394,7 +414,7 @@ if (isset($_POST['submit'])) {
 		*/
 	for ($x = 1; $x < ($_POST['squadnum'] + 1); $x++) {
 		if (!isset($scoredarray)) {
-			$units_array = explode(", ", $_POST['units']); //These are the units that the user has entered
+			$units_array = explode(", ", trim($_POST['units'])); //These are the units that the user has entered
 			$unsortedstatarray = stat_array($units_array, $unit_data_array); 
 			$stats = array("hp", "atk", "def", "rec");
 			//First assign a score to every single unit:
@@ -406,9 +426,11 @@ if (isset($_POST['submit'])) {
 					$scoredarray[$key] = $scoredarray[$key] * $units[$key][0];
 				}
 			}
+			$temp_array = $scoredarray; //Assign temporary variable for scoring purposes
 		}
 		else{
 			$units_array = $scoredarray;
+			$temp_array = $units_array;
 		}
 		if (count($units_array) <= 2) {
 			//This means less than 2 units. just echo out these units as the leaders
@@ -421,7 +443,6 @@ if (isset($_POST['submit'])) {
 		arsort($scoredarray);//This array is the array of units scored by their importance. Now, we will search for a viable leader
 		//Now we are going to attempt to assemble a squad that closely follows with the guidelines put in place from the provided squad templates. $result will be the temporary holding variable for holding the array of the units that the user has submitted while the array is undergoing modification
 		if (!$printed) {
-			print_r($scoredarray);
 			$printed = true;
 		}
 		$unitsneeded = 6;
@@ -442,7 +463,6 @@ if (isset($_POST['submit'])) {
 							$result_exception1 = assign_exception($scoredarray, $leadersarray, $units, 'EXCEPTION1');
 							$leadersarray = $result_exception1[0];
 							$scoredarray = $result_exception1[1];
-							
 						}
 						break;
 					case "Healer":
@@ -469,20 +489,35 @@ if (isset($_POST['submit'])) {
 				}
 		}
 		$suggestedsquad = array_slice($scoredarray, 0, $unitsneeded);
-		echo "<h2>Suggested Squad $x is:</h2>";
+		$array_score_sum = array();
+		$squadStr = '';
 		foreach ($leadersarray as $key => $val) {
-			echo "$key (Leader)<br/>";
+			$squadStr .= "$key (Leader)<br/>";
+			array_push($array_score_sum, $key);
 		}
 		if ($healer) {
-			echo "$healer (Healer) <br/>";
+			$squadStr .= "$healer (Healer) <br/>";
+			array_push($array_score_sum, $healer);
 		}
 		if ($unlimitedBB) {
-			echo "$unlimitedBB <br/>";
+			$squadStr .= "$unlimitedBB <br/>";
+			array_push($array_score_sum, $unlimitedBB);
 		}
 		foreach($suggestedsquad as $key => $val) {
-			echo "$key<br/>";
+			$squadStr .= "$key<br/>";
+			array_push($array_score_sum, $key);
 			unset($scoredarray[$key]);
 		}
+		$total_score = 0;
+		foreach ($array_score_sum as $unit) {
+			$total_score += $temp_array[$unit];
+		}
+		$viability = round((($total_score / IDEAL_TEAM) * 100), 2);
+		if ($viability >= 100) {
+			$viability == 100;
+		}
+		echo "<h3>Suggested Squad $x has viability percentage of $viability % and is:</h3>";
+		echo $squadStr;
 	}
 }
 ?>
@@ -490,11 +525,10 @@ if (isset($_POST['submit'])) {
 <form method="post" action=".">
 <hr>
 <h4>Squad Suggester</h4>
-
 <p>
 Please enter in the units (seperate each unit name by commas with space) you wish to form a squad with. Squads become more inaccruate the more squads you choose. Maxwell allows 3 squads, but you can ask the app to suggest a mazimum of 10. Ensure you spell the unit name correctly. Example: Tyrant Lilly Matah, Creator Maxwell, Thief God Zelnite<br/>
 <label for ="number">Number of Squads to Suggest:</label> 
-<input type="number" name="squadnum" min="1" max="10">
+<input type="number" name="squadnum" min="1" max="10" value="1">
 Units
 <textarea name="units" style="width:500px;height:100px;" value="<?php if (!empty($_POST['units'])) { echo $_POST['units'];} else {
 	echo '';}?>"></textarea>
